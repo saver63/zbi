@@ -22,8 +22,8 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/zbi
-    username: root
-    password: qqling3160783997
+    username: XXXX
+    password: XXXX
   # Redis 配置
   # todo 需替换配置，然后取消注释
 #  redis:
@@ -61,6 +61,8 @@ mybatis-plus:
       logic-delete-field: isDelete # 全局逻辑删除的实体字段名
       logic-delete-value: 1 # 逻辑已删除值（默认为 1）
       logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
+
+
 # 微信相关
 wx:
   # 微信公众平台
@@ -101,3 +103,8 @@ knife4j:
         api-rule: package
         api-rule-resources:
           - com.yupi.springbootinit.controller
+# 鱼聪明AI配置
+yuapi:
+  client:
+    access-key: XXXX
+    secret-key: XXXX

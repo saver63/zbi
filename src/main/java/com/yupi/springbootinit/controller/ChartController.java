@@ -11,9 +11,11 @@ import com.yupi.springbootinit.constant.CommonConstant;
 import com.yupi.springbootinit.constant.UserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
+import com.yupi.springbootinit.manager.AiManager;
 import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
+import com.yupi.springbootinit.model.vo.BiResponse;
 import com.yupi.springbootinit.service.ChartService;
 import com.yupi.springbootinit.service.UserService;
 import com.yupi.springbootinit.utils.ExcelUtils;
@@ -44,6 +46,9 @@ public class ChartController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private AiManager aiManager;
 
     // region 增删改查
 
@@ -218,7 +223,7 @@ public class ChartController {
      * @return
      */
     @PostMapping("/gen")
-    public BaseResponse<String> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
+    public BaseResponse<BiResponse> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
                                              GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
         String name = genChartByAiRequest.getName();
         String goal = genChartByAiRequest.getGoal();
@@ -227,14 +232,72 @@ public class ChartController {
         ThrowUtils.throwIf(StringUtils.isBlank(goal),ErrorCode.PARAMS_ERROR,"目标为空");
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100,ErrorCode.PARAMS_ERROR,"名称过长");
 
-        //用户的excel文件输入
+        //获取当前用户信息
+        User loginUser = userService.getLoginUser(request);
+
+
+        //无需写prompt,直接调用现有模型，直接调用现有模型.http://www.yucongming.com
+//        final String prompt = "你是一个数据分析师和前端开发专家，接下来我会按照以下固定格式给你提供内容:\n" +
+//                "分析需求:\n" +
+//                "{数据分析的需求或者目标}\n" +
+//                "原始数据:\n" +
+//                "{csv格式的原始数据，用,作为分隔符}\n" +
+//                "请根据这两部分内容，帮我按照以下格式生成内容（此外不要输出任何多余开头、结尾、注释）\n" +
+//                "【【【【【【\n" +
+//                "{前端Echarts V5 的option 配置对象js代码，合理的将数据进行可视化，不要生成任何的内容，比如注释}\n" +
+//                "【【【【【【\n" +
+//                "{明确的数据分析结论，越详细越好，不要生成多余的注释}";
+        long biModeId = 111111;
+
+        //分析需求：
+        //分析网站用户增长情况
+        //原始数据：
+        //日期,用户数
+        //1号,10
+        //2号,20
+        //3号,30
+        
+        //用户输入
         StringBuilder userInput = new StringBuilder();
-        userInput.append("你是一个系统分析师，接下来我会给你我的分析目标和原始数据，请告诉我分析结论.").append("\n");
-        userInput.append("分析目标:").append(goal).append("\n");
+        userInput.append("分析需求：").append("\n");
+
+        //拼接分析目标
+        String userGoal = goal;
+        if (StringUtils.isNotBlank(chartType)){
+            userGoal+= ". 请使用" + chartType;
+        }
+        userInput.append(userGoal).append("\n");
+        userInput.append("原始数据").append("\n");
         //压缩后的数据
-        String result= ExcelUtils.excelToCsv(multipartFile);
-        userInput.append("数据:").append(result).append("\n");
-        return ResultUtils.success(userInput.toString());
+        String csvData= ExcelUtils.excelToCsv(multipartFile);
+        userInput.append(csvData).append("\n");
+        String result = aiManager.doChat(biModeId, userInput.toString());
+        String[] splits = result.split("【【【【【");
+        if (splits.length < 3){
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR,"AI生成错误");
+        }
+        String genChart = splits[1].trim();
+        String genResult = splits[2].trim();
+
+        //插入到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setGenChart(genChart);
+        chart.setGenResult(genResult);
+        chart.setUserId(loginUser.getId());
+        boolean saveResult = chartService.save(chart);
+        ThrowUtils.throwIf(!saveResult,ErrorCode.SYSTEM_ERROR,"图表保存失败");
+
+        BiResponse biResponse = new BiResponse();
+        biResponse.setGenChart(genChart);
+        biResponse.setGenResult(genResult);
+        biResponse.setChartId(chart.getId());
+        return ResultUtils.success(biResponse);
+
+
 //        //读取到用户上传的excel文件,进行一个处理
 //        User loginUser = userService.getLoginUser(request);
 //        // 文件目录：根据业务、用户来划分
