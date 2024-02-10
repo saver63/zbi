@@ -1,5 +1,6 @@
 package com.yupi.springbootinit.controller;
 
+import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.springbootinit.annotation.AuthCheck;
@@ -12,6 +13,7 @@ import com.yupi.springbootinit.constant.UserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
 import com.yupi.springbootinit.manager.AiManager;
+import com.yupi.springbootinit.manager.RedisLimiterManager;
 import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
@@ -29,6 +31,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * 帖子接口
@@ -49,6 +53,9 @@ public class ChartController {
 
     @Resource
     private AiManager aiManager;
+
+    @Resource
+    private RedisLimiterManager redisLimiterManager;
 
     // region 增删改查
 
@@ -231,9 +238,24 @@ public class ChartController {
         //校验
         ThrowUtils.throwIf(StringUtils.isBlank(goal),ErrorCode.PARAMS_ERROR,"目标为空");
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100,ErrorCode.PARAMS_ERROR,"名称过长");
+        //校验文件
+        long size = multipartFile.getSize();
+        String originalFilename = multipartFile.getOriginalFilename();
+        //校验文件大小
+        final long ONE_MB = 1024 * 1024L;
+        ThrowUtils.throwIf(size>ONE_MB,ErrorCode.PARAMS_ERROR,"文件超过1M");
+        //校验文件后缀 aaa.png
+        String suffix = FileUtil.getSuffix(originalFilename);
+        final List<String> validFileSuffixList = Arrays.asList("jpg","png","svg","webp","jpeg","xlsx");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix),ErrorCode.PARAMS_ERROR,"文件后缀非法");
+
+
 
         //获取当前用户信息
         User loginUser = userService.getLoginUser(request);
+        //限流判断,每个用户一个限流器,
+        // 参数这样写的好处是每个方法的限流器不会冲突，一个方法的调用了的次数，不会影响其他方法的使用
+        redisLimiterManager.doRateLimit("genChartByAi_"+loginUser.getId());
 
 
         //无需写prompt,直接调用现有模型，直接调用现有模型.http://www.yucongming.com
@@ -247,7 +269,7 @@ public class ChartController {
 //                "{前端Echarts V5 的option 配置对象js代码，合理的将数据进行可视化，不要生成任何的内容，比如注释}\n" +
 //                "【【【【【【\n" +
 //                "{明确的数据分析结论，越详细越好，不要生成多余的注释}";
-        long biModeId = 111111;
+        long biModeId = 1661541474598211586L;
 
         //分析需求：
         //分析网站用户增长情况

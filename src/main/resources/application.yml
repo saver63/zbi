@@ -22,8 +22,8 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/zbi
-    username: XXXX
-    password: XXXX
+    username: root
+    password: qqling3160783997
   # Redis 配置
   # todo 需替换配置，然后取消注释
 #  redis:
@@ -106,5 +106,5 @@ knife4j:
 # 鱼聪明AI配置
 yuapi:
   client:
-    access-key: XXXX
-    secret-key: XXXX
+    access-key: arhkipdx9nbeuch3853zzcxlhxdvulk9
+    secret-key: 16q5jwdyzyobkq1720pmfndxv9c92lek
