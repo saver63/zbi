@@ -10,6 +10,8 @@
             <result property="goal" column="goal" jdbcType="VARCHAR"/>
             <result property="chartData" column="chartData" jdbcType="VARCHAR"/>
             <result property="chartType" column="chartType" jdbcType="VARCHAR"/>
+            <result property="status" column="status" jdbcType="VARCHAR"/>
+            <result property="execMessage" column="execMessage" jdbcType="VARCHAR"/>
             <result property="genChart" column="genChart" jdbcType="VARCHAR"/>
             <result property="genResult" column="genResult" jdbcType="VARCHAR"/>
             <result property="userId" column="userId" jdbcType="BIGINT"/>
@@ -22,7 +24,7 @@
         id,'name',goal,chartData,
         chartType,genChart,genResult,
         userId,createTime,updateTime,
-        isDelete
+        isDelete,status,execMessage
     </sql>
 
     <select id="queryChartData" parameterType="string" resultType="list">

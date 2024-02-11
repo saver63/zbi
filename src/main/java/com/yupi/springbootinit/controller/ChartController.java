@@ -13,7 +13,6 @@ import com.yupi.springbootinit.constant.UserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
 import com.yupi.springbootinit.manager.AiManager;
-import com.yupi.springbootinit.manager.RedisLimiterManager;
 import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
@@ -33,6 +32,8 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * 帖子接口
@@ -55,7 +56,10 @@ public class ChartController {
     private AiManager aiManager;
 
     @Resource
-    private RedisLimiterManager redisLimiterManager;
+    private ThreadPoolExecutor threadPoolExecutor;
+
+//    @Resource
+//    private RedisLimiterManager redisLimiterManager;
 
     // region 增删改查
 
@@ -147,7 +151,6 @@ public class ChartController {
     }
 
 
-
     /**
      * 分页获取列表（封装类）
      *
@@ -157,7 +160,7 @@ public class ChartController {
      */
     @PostMapping("/list/page")
     public BaseResponse<Page<Chart>> listChartByPage(@RequestBody ChartQueryRequest chartQueryRequest,
-            HttpServletRequest request) {
+                                                     HttpServletRequest request) {
         long current = chartQueryRequest.getCurrent();
         long size = chartQueryRequest.getPageSize();
         // 限制爬虫
@@ -176,7 +179,7 @@ public class ChartController {
      */
     @PostMapping("/my/list/page")
     public BaseResponse<Page<Chart>> listMyChartVOByPage(@RequestBody ChartQueryRequest chartQueryRequest,
-            HttpServletRequest request) {
+                                                         HttpServletRequest request) {
         if (chartQueryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -221,8 +224,9 @@ public class ChartController {
         return ResultUtils.success(result);
     }
 
+
     /**
-     * 智能分析
+     * 智能分析(同步)
      *
      * @param multipartFile
      * @param genChartByAiRequest
@@ -231,7 +235,7 @@ public class ChartController {
      */
     @PostMapping("/gen")
     public BaseResponse<BiResponse> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
-                                             GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+                                                 GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
         String name = genChartByAiRequest.getName();
         String goal = genChartByAiRequest.getGoal();
         String chartType = genChartByAiRequest.getChartType();
@@ -255,7 +259,7 @@ public class ChartController {
         User loginUser = userService.getLoginUser(request);
         //限流判断,每个用户一个限流器,
         // 参数这样写的好处是每个方法的限流器不会冲突，一个方法的调用了的次数，不会影响其他方法的使用
-        redisLimiterManager.doRateLimit("genChartByAi_"+loginUser.getId());
+//        redisLimiterManager.doRateLimit("genChartByAi_"+loginUser.getId());
 
 
         //无需写prompt,直接调用现有模型，直接调用现有模型.http://www.yucongming.com
@@ -278,7 +282,7 @@ public class ChartController {
         //1号,10
         //2号,20
         //3号,30
-        
+
         //用户输入
         StringBuilder userInput = new StringBuilder();
         userInput.append("分析需求：").append("\n");
@@ -344,6 +348,164 @@ public class ChartController {
     }
 
     /**
+     * 智能分析（异步）
+     *
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen/async")
+    public BaseResponse<BiResponse> genChartByAiAsync(@RequestPart("file") MultipartFile multipartFile,
+                                                 GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+        String name = genChartByAiRequest.getName();
+        String goal = genChartByAiRequest.getGoal();
+        String chartType = genChartByAiRequest.getChartType();
+        //校验
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+        //校验文件
+        long size = multipartFile.getSize();
+        String originalFilename = multipartFile.getOriginalFilename();
+        //校验文件大小
+        final long ONE_MB = 1024 * 1024L;
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.PARAMS_ERROR, "文件超过1M");
+        //校验文件后缀 aaa.png
+        String suffix = FileUtil.getSuffix(originalFilename);
+        final List<String> validFileSuffixList = Arrays.asList("xlsx", "xls");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix), ErrorCode.PARAMS_ERROR, "文件后缀非法");
+
+
+        //获取当前用户信息
+        User loginUser = userService.getLoginUser(request);
+        //限流判断,每个用户一个限流器,
+        // 参数这样写的好处是每个方法的限流器不会冲突，一个方法的调用了的次数，不会影响其他方法的使用
+//        redisLimiterManager.doRateLimit("genChartByAi_"+loginUser.getId());
+
+
+        //无需写prompt,直接调用现有模型，直接调用现有模型.http://www.yucongming.com
+//        final String prompt = "你是一个数据分析师和前端开发专家，接下来我会按照以下固定格式给你提供内容:\n" +
+//                "分析需求:\n" +
+//                "{数据分析的需求或者目标}\n" +
+//                "原始数据:\n" +
+//                "{csv格式的原始数据，用,作为分隔符}\n" +
+//                "请根据这两部分内容，帮我按照以下格式生成内容（此外不要输出任何多余开头、结尾、注释）\n" +
+//                "【【【【【【\n" +
+//                "{前端Echarts V5 的option 配置对象js代码，合理的将数据进行可视化，不要生成任何的内容，比如注释}\n" +
+//                "【【【【【【\n" +
+//                "{明确的数据分析结论，越详细越好，不要生成多余的注释}";
+        long biModeId = 1661541474598211586L;
+
+        //分析需求：
+        //分析网站用户增长情况
+        //原始数据：
+        //日期,用户数
+        //1号,10
+        //2号,20
+        //3号,30
+
+        //用户输入
+        StringBuilder userInput = new StringBuilder();
+        userInput.append("分析需求：").append("\n");
+
+        //拼接分析目标
+        String userGoal = goal;
+        if (StringUtils.isNotBlank(chartType)) {
+            userGoal += ". 请使用" + chartType;
+        }
+        userInput.append(userGoal).append("\n");
+        userInput.append("原始数据").append("\n");
+        //压缩后的数据
+        String csvData = ExcelUtils.excelToCsv(multipartFile);
+        userInput.append(csvData).append("\n");
+
+        //插入到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setStatus("wait");
+
+        chart.setUserId(loginUser.getId());
+        boolean saveResult = chartService.save(chart);
+        ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+
+        //todo 建议处理任务队列满了以后，抛异常的情况
+        CompletableFuture.runAsync(() -> {
+            //调用AI前更新一次数据库
+            //任务：先修改图表的任务状态为"执行中"。等执行成功后，修改为”已完成“。保存执行结果；执行失败后，修改状态为"失败"，记录任务失败的信息
+            Chart updateChart = new Chart();
+            updateChart.setId(chart.getId());
+            updateChart.setStatus("running");
+            boolean b = chartService.updateById(updateChart);
+            if (!b) {
+                //todo 把状态放到数据库
+                handleChartUpdateError(chart.getId(),"更新图表执行中状态失败");
+                return;
+            }
+
+            //调用AI
+            String result = aiManager.doChat(biModeId, userInput.toString());
+            String[] splits = result.split("【【【【【");
+            if (splits.length < 3) {
+                handleChartUpdateError(chart.getId(),"AI生成错误");
+                return;
+            }
+            String genChart = splits[1].trim();
+            String genResult = splits[2].trim();
+            //调用AI后再更新一次数据库
+            Chart updateChartResult = new Chart();
+            updateChartResult.setId(chart.getId());
+            updateChartResult.setGenChart(genChart);
+            updateChartResult.setGenResult(genResult);
+            //todo 建议定义为枚举值
+            updateChartResult.setStatus("succeed");
+            boolean updateResult = chartService.updateById(updateChartResult);
+            if (!updateResult) {
+                //todo 把状态放到数据库
+                handleChartUpdateError(chart.getId(),"更新图表成功状态失败");
+            }
+        },threadPoolExecutor);
+
+        BiResponse biResponse = new BiResponse();
+        biResponse.setChartId(chart.getId());
+        return ResultUtils.success(biResponse);
+
+//        //读取到用户上传的excel文件,进行一个处理
+//        User loginUser = userService.getLoginUser(request);
+//        // 文件目录：根据业务、用户来划分
+//        String uuid = RandomStringUtils.randomAlphanumeric(8);
+//        String filename = uuid + "-" + multipartFile.getOriginalFilename();
+//        File file = null;
+//        try {
+//            // 返回可访问地址
+//            return ResultUtils.success("");
+//        } catch (Exception e) {
+////            log.error("file upload error, filepath = " + filepath, e);
+//            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
+//        } finally {
+//            if (file != null) {
+//                // 删除临时文件
+//                boolean delete = file.delete();
+//                if (!delete) {
+////                    log.error("file delete error, filepath = {}", filepath);
+//                }
+//            }
+//        }
+    }
+
+    private void handleChartUpdateError(long chartId, String execMessage) {
+        Chart updateChartResult = new Chart();
+        updateChartResult.setId(chartId);
+        updateChartResult.setExecMessage("execMessage");
+        boolean updateResult = chartService.updateById(updateChartResult);
+        if (!updateResult) {
+            log.error("更新图表失败状态失败" + chartId + "," + execMessage);
+        }
+    }
+
+    /**
      * 获取查询包装类
      *
      * @param chartQueryRequest
@@ -367,12 +529,12 @@ public class ChartController {
 
 
         // 拼接查询条件
-        queryWrapper.eq(id != null && id >0, "id", id);
+        queryWrapper.eq(id != null && id > 0, "id", id);
         queryWrapper.like(StringUtils.isNotBlank(name), "name", name);
         queryWrapper.eq(StringUtils.isNotBlank(goal), "goal", goal);
         queryWrapper.eq(StringUtils.isNotBlank(chartType), "chartType", chartType);
         queryWrapper.eq(ObjectUtils.isNotEmpty(userId), "userId", userId);
-        queryWrapper.eq("isDelete",false);
+        queryWrapper.eq("isDelete", false);
         queryWrapper.orderBy(SqlUtils.validSortField(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC),
                 sortField);
         return queryWrapper;
