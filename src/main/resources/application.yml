@@ -106,5 +106,5 @@ knife4j:
 # 鱼聪明AI配置
 yuapi:
   client:
-    access-key: o1fs09d1iz1ot9c90h6xaoz68dyatamk
-    secret-key: iafwgfqj63jgvoxg5a0rcn87esjo34sy
+    access-key: XXXX
+    secret-key: XXXX
