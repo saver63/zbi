@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.yupi.springbootinit.annotation.AuthCheck;
+import com.yupi.springbootinit.bizmq.BiMessageProducer;
 import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ErrorCode;
@@ -57,6 +58,9 @@ public class ChartController {
 
     @Resource
     private ThreadPoolExecutor threadPoolExecutor;
+
+    @Resource
+    private BiMessageProducer biMessageProducer;
 
 //    @Resource
 //    private RedisLimiterManager redisLimiterManager;
@@ -273,7 +277,7 @@ public class ChartController {
 //                "{前端Echarts V5 的option 配置对象js代码，合理的将数据进行可视化，不要生成任何的内容，比如注释}\n" +
 //                "【【【【【【\n" +
 //                "{明确的数据分析结论，越详细越好，不要生成多余的注释}";
-        long biModeId = 1661541474598211586L;
+        long biModeId = CommonConstant.BI_MODEL_ID;
 
         //分析需求：
         //分析网站用户增长情况
@@ -383,26 +387,8 @@ public class ChartController {
 //        redisLimiterManager.doRateLimit("genChartByAi_"+loginUser.getId());
 
 
-        //无需写prompt,直接调用现有模型，直接调用现有模型.http://www.yucongming.com
-//        final String prompt = "你是一个数据分析师和前端开发专家，接下来我会按照以下固定格式给你提供内容:\n" +
-//                "分析需求:\n" +
-//                "{数据分析的需求或者目标}\n" +
-//                "原始数据:\n" +
-//                "{csv格式的原始数据，用,作为分隔符}\n" +
-//                "请根据这两部分内容，帮我按照以下格式生成内容（此外不要输出任何多余开头、结尾、注释）\n" +
-//                "【【【【【【\n" +
-//                "{前端Echarts V5 的option 配置对象js代码，合理的将数据进行可视化，不要生成任何的内容，比如注释}\n" +
-//                "【【【【【【\n" +
-//                "{明确的数据分析结论，越详细越好，不要生成多余的注释}";
-        long biModeId = 1661541474598211586L;
 
-        //分析需求：
-        //分析网站用户增长情况
-        //原始数据：
-        //日期,用户数
-        //1号,10
-        //2号,20
-        //3号,30
+        long biModeId = CommonConstant.BI_MODEL_ID;
 
         //用户输入
         StringBuilder userInput = new StringBuilder();
@@ -472,27 +458,80 @@ public class ChartController {
         biResponse.setChartId(chart.getId());
         return ResultUtils.success(biResponse);
 
-//        //读取到用户上传的excel文件,进行一个处理
-//        User loginUser = userService.getLoginUser(request);
-//        // 文件目录：根据业务、用户来划分
-//        String uuid = RandomStringUtils.randomAlphanumeric(8);
-//        String filename = uuid + "-" + multipartFile.getOriginalFilename();
-//        File file = null;
-//        try {
-//            // 返回可访问地址
-//            return ResultUtils.success("");
-//        } catch (Exception e) {
-////            log.error("file upload error, filepath = " + filepath, e);
-//            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
-//        } finally {
-//            if (file != null) {
-//                // 删除临时文件
-//                boolean delete = file.delete();
-//                if (!delete) {
-////                    log.error("file delete error, filepath = {}", filepath);
-//                }
-//            }
-//        }
+    }
+
+    /**
+     * 智能分析（异步消息队列）
+     *
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen/async/mq")
+    public BaseResponse<BiResponse> genChartByAiAsyncMq(@RequestPart("file") MultipartFile multipartFile,
+                                                      GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+        String name = genChartByAiRequest.getName();
+        String goal = genChartByAiRequest.getGoal();
+        String chartType = genChartByAiRequest.getChartType();
+        //校验
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+        //校验文件
+        long size = multipartFile.getSize();
+        String originalFilename = multipartFile.getOriginalFilename();
+        //校验文件大小
+        final long ONE_MB = 1024 * 1024L;
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.PARAMS_ERROR, "文件超过1M");
+        //校验文件后缀 aaa.png
+        String suffix = FileUtil.getSuffix(originalFilename);
+        final List<String> validFileSuffixList = Arrays.asList("xlsx", "xls");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix), ErrorCode.PARAMS_ERROR, "文件后缀非法");
+
+
+        //获取当前用户信息
+        User loginUser = userService.getLoginUser(request);
+        //限流判断,每个用户一个限流器,
+        // 参数这样写的好处是每个方法的限流器不会冲突，一个方法的调用了的次数，不会影响其他方法的使用
+//        redisLimiterManager.doRateLimit("genChartByAi_"+loginUser.getId());
+
+
+        StringBuilder userInput = new StringBuilder();
+        userInput.append("分析需求：").append("\n");
+
+        // 拼接分析目标
+        String userGoal = goal;
+        if (StringUtils.isNotBlank(chartType)) {
+            userGoal += "，请使用" + chartType;
+        }
+        userInput.append(userGoal).append("\n");
+        userInput.append("原始数据：").append("\n");
+        // 压缩后的数据
+        String csvData = ExcelUtils.excelToCsv(multipartFile);
+        userInput.append(csvData).append("\n");
+
+
+
+        //插入到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setStatus("wait");
+
+        chart.setUserId(loginUser.getId());
+        boolean saveResult = chartService.save(chart);
+        ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+        long newChartId = chart.getId();
+        //现在改为在消费者中单独处理任务，而不是在线程池中处理
+        biMessageProducer.sendMessage(String.valueOf(newChartId));
+
+        BiResponse biResponse = new BiResponse();
+        biResponse.setChartId(newChartId);
+        return ResultUtils.success(biResponse);
+
+
     }
 
     private void handleChartUpdateError(long chartId, String execMessage) {
