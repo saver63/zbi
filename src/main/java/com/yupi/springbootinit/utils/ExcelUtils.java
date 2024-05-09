@@ -28,13 +28,6 @@ public class ExcelUtils {
      */
 
     public static String excelToCsv(MultipartFile multipartFile) {
-        //调用胡图的方法读取本地的文件
-//        File file = null;
-//        try {
-//            file = ResourceUtils.getFile("classpath:网站数据.xlsx");
-//        } catch (FileNotFoundException e) {
-//            throw new RuntimeException(e);
-//        }
         //用read方法把已知的文件用Map的方式读取
         List<Map<Integer, String>> list = null;
         try {

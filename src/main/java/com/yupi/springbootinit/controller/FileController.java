@@ -27,8 +27,6 @@ import java.util.Arrays;
 /**
  * 文件接口
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
  */
 @RestController
 @RequestMapping("/file")
@@ -52,11 +50,14 @@ public class FileController {
     @PostMapping("/upload")
     public BaseResponse<String> uploadFile(@RequestPart("file") MultipartFile multipartFile,
             UploadFileRequest uploadFileRequest, HttpServletRequest request) {
+        //获取业务名称
         String biz = uploadFileRequest.getBiz();
+        //根据业务名称获取值
         FileUploadBizEnum fileUploadBizEnum = FileUploadBizEnum.getEnumByValue(biz);
         if (fileUploadBizEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+        //校验文件
         validFile(multipartFile, fileUploadBizEnum);
         User loginUser = userService.getLoginUser(request);
         // 文件目录：根据业务、用户来划分

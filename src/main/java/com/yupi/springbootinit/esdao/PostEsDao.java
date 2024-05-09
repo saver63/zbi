@@ -14,4 +14,6 @@ import java.util.List;
 public interface PostEsDao extends ElasticsearchRepository<PostEsDTO, Long> {
 
     List<PostEsDTO> findByUserId(Long userId);
+
+    List<PostEsDTO> findByTitle(String title);
 }

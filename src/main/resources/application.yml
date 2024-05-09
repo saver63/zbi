@@ -14,30 +14,30 @@ spring:
   # session 配置
   session:
     # todo 取消注释开启分布式 session（须先配置 Redis）
-    # store-type: redis
+     store-type: redis
     # 30 天过期
-    timeout: 2592000
+     timeout: 2592000
   # 数据库配置
   # todo 需替换配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/zbi
     username: root
-    password: XXXX
+    password: 123456
   # Redis 配置
   # todo 需替换配置，然后取消注释
   redis:
-    database: 1
+    database: 0
     host: localhost
     port: 6379
     timeout: 5000
-    password: 123456
+    password:
   # Elasticsearch 配置
   # todo 需替换配置，然后取消注释
-#  elasticsearch:
-#    uris: http://localhost:9200
-#    username: root
-#    password: 123456
+  elasticsearch:
+    uris: http://localhost:9200
+    username: root
+    password:
   # 文件上传
   servlet:
     multipart:
@@ -66,29 +66,6 @@ mybatis-plus:
       logic-delete-field: isDelete # 全局逻辑删除的实体字段名
       logic-delete-value: 1 # 逻辑已删除值（默认为 1）
       logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
-
-
-# 微信相关
-wx:
-  # 微信公众平台
-  # todo 需替换配置
-  mp:
-    token: xxx
-    aesKey: xxx
-    appId: xxx
-    secret: xxx
-    config-storage:
-      http-client-type: HttpClient
-      key-prefix: wx
-      redis:
-        host: 127.0.0.1
-        port: 6379
-      type: Memory
-  # 微信开放平台
-  # todo 需替换配置
-  open:
-    appId: xxx
-    appSecret: xxx
 # 对象存储
 # todo 需替换配置
 cos:
@@ -111,5 +88,5 @@ knife4j:
 # 鱼聪明AI配置
 yuapi:
   client:
-    access-key: XXXX
-    secret-key: XXXX
+    access-key: cqm1ck44e2j5amgmgv4aej0em6pc8ek8
+    secret-key: rqfjg3kmno4pjo7fapfe78ubv6geqy3g

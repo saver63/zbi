@@ -7,6 +7,7 @@ import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
 
@@ -21,7 +22,7 @@ import java.util.List;
  * @from <a href="https://yupi.icu">编程导航知识星球</a>
  **/
 // todo 取消注释开启 ES（须先配置 ES）
-//@Document(indexName = "post")
+@Document(indexName = "post")
 @Data
 public class PostEsDTO implements Serializable {
 
@@ -48,15 +49,6 @@ public class PostEsDTO implements Serializable {
      */
     private List<String> tags;
 
-    /**
-     * 点赞数
-     */
-    private Integer thumbNum;
-
-    /**
-     * 收藏数
-     */
-    private Integer favourNum;
 
     /**
      * 创建用户 id
@@ -83,7 +75,7 @@ public class PostEsDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 对象转包装类
+     * 对象转包装类,数据库中的JSON对象转换成包装类
      *
      * @param post
      * @return
